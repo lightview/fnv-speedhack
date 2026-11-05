@@ -1,5 +1,6 @@
 import {
   ButtonItem,
+  Dropdown,
   PanelSection,
   PanelSectionRow,
   TextField,
@@ -31,6 +32,7 @@ const PRESETS: number[] = [0.5, 1, 1.5, 2, 3, 5, 10];
 function Content() {
   const [status, setStatus] = useState<Status | null>(null);
   const [pathInput, setPathInput] = useState("");
+  const [selectedCandidate, setSelectedCandidate] = useState<string>("");
   const [busy, setBusy] = useState(false);
 
   const refresh = async () => {
@@ -38,6 +40,9 @@ function Content() {
       const s = await getStatus();
       setStatus(s);
       if (s.game_dir) setPathInput(s.game_dir);
+      if (s.candidates.length > 0 && !selectedCandidate) {
+        setSelectedCandidate(s.candidates[0]);
+      }
     } catch (e) {
       console.error("get_status failed:", e);
     }
@@ -84,10 +89,31 @@ function Content() {
       const s = await getStatus();
       if (s.candidates.length > 0) {
         await setGameDir(s.candidates[0]);
-        toaster.toast({ title: "FNV Speed", body: `Found: ${s.candidates[0]}` });
+        setSelectedCandidate(s.candidates[0]);
+        toaster.toast({
+          title: "FNV Speed",
+          body: s.candidates.length > 1
+            ? `Found ${s.candidates.length} copies - pick the right one below`
+            : `Found: ${s.candidates[0]}`
+        });
       } else {
         toaster.toast({ title: "FNV Speed", body: "No FNV installation found" });
       }
+    } finally {
+      setBusy(false);
+      refresh();
+    }
+  };
+
+  const saveSelected = async () => {
+    if (!selectedCandidate) return;
+    setBusy(true);
+    try {
+      const ok = await setGameDir(selectedCandidate);
+      toaster.toast({
+        title: "FNV Speed",
+        body: ok ? "Game folder saved" : "Save failed"
+      });
     } finally {
       setBusy(false);
       refresh();
@@ -143,6 +169,24 @@ function Content() {
           Install NVSE plugin DLL
         </ButtonItem>
       </PanelSectionRow>
+
+      {status && status.candidates.length > 1 && (
+        <PanelSectionRow>
+          <Dropdown
+            label="Found copies"
+            options={status.candidates.map((c) => ({ value: c, label: c.split("/").pop() || c }))}
+            selected={selectedCandidate || status.candidates[0]}
+            onChange={({ value }) => setSelectedCandidate(value as string)}
+          />
+        </PanelSectionRow>
+      )}
+      {status && status.candidates.length > 1 && (
+        <PanelSectionRow>
+          <ButtonItem layout="below" onClick={saveSelected} disabled={busy}>
+            Use selected copy
+          </ButtonItem>
+        </PanelSectionRow>
+      )}
 
       <PanelSectionRow>
         <TextField

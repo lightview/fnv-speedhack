@@ -11,7 +11,9 @@ DLL_NAME = "FNVSpeedhack.dll"
 CTL_FILE = "fnvspeed.txt"
 STATUS_FILE = "fnvspeed_status.txt"
 GAME_EXE = "FalloutNV.exe"
-GAME_SUBDIR = os.path.join("Fallout New Vegas")
+# Steam installs localized FNV depots into suffixed folders; which one runs
+# depends on the account language (e.g. "russian" -> enplczru)
+GAME_SUBDIRS = ["Fallout New Vegas", "Fallout New Vegas enplczru"]
 
 DEFAULT_INI = """[speedhack]
 ; VK codes (decimal). 0 disables a hotkey.
@@ -84,20 +86,22 @@ def _library_paths(root: str) -> list[str]:
     return paths
 
 
-def _game_dir_if_valid(library: str) -> str | None:
-    game_dir = os.path.join(library, "steamapps", "common", GAME_SUBDIR)
-    if os.path.isfile(os.path.join(game_dir, GAME_EXE)):
-        return game_dir
-    return None
+def _game_dirs_in_library(library: str) -> list[str]:
+    out = []
+    for sub in GAME_SUBDIRS:
+        game_dir = os.path.join(library, "steamapps", "common", sub)
+        if os.path.isfile(os.path.join(game_dir, GAME_EXE)):
+            out.append(game_dir)
+    return out
 
 
 def _detect_candidates() -> list[str]:
     found: list[str] = []
     for root in _steam_roots():
         for library in _library_paths(root):
-            gd = _game_dir_if_valid(library)
-            if gd and gd not in found:
-                found.append(gd)
+            for gd in _game_dirs_in_library(library):
+                if gd not in found:
+                    found.append(gd)
     return found
 
 
