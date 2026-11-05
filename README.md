@@ -105,13 +105,25 @@ gcc -O2 -o test_harness.exe test/test_harness.c -lkernel32 -luser32
 | `HotkeyCycle`        | `119` (F8)     | cycle presets, `0` = off (VK code)        |
 | `HotkeyUp`           | `120` (F9)     | step up, `0` = off                        |
 | `HotkeyDown`         | `121` (F10)    | step down, `0` = off                      |
-| `Presets`            | `1.0,2.0,3.0,5.0` | up to 16 values, e.g. add `0.5` for slow-mo |
+| `SpeedKeys`          | `97:1.0,98:3.0,99:5.0,100:10.0` | direct `vk:speed` binds (Numpad1..4), up to 8 |
+| `Presets`            | `1.0,2.0,3.0,5.0,10.0` | up to 16 values, e.g. add `0.5` for slow-mo |
 | `StartupSpeed`       | `1.0`          | speed on plugin load                      |
 | `ControlFileEnabled` | `1`            | fnvspeed.txt / fnvspeed_status.txt IPC    |
 | `HotkeyPollMs`       | `30`           | hotkey poll interval                      |
 | `ControlPollMs`      | `250`          | file poll interval                        |
 | `BeepFeedback`       | `1`            | beep on speed change                      |
 | `LogEnabled`         | `1`            | write fnvspeed.log                        |
+
+### Recommended Steam Deck paddle layout
+
+In Steam Input (FNV → controller layout → Edit layout → Back Grip Buttons):
+
+| Paddle | Keyboard key | Speed |
+|--------|--------------|-------|
+| L4 | Keypad 1 | 1x |
+| L5 | Keypad 2 | 3x |
+| R4 | Keypad 3 | 5x |
+| R5 | Keypad 4 | 10x |
 
 ## License
 

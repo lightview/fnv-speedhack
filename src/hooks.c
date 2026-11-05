@@ -48,8 +48,8 @@ static double    g_gttCarry;
 static int       g_gttValid;
 
 /* ---- presets ---- */
-static float g_presets[FNVSPD_MAX_PRESETS] = { 1.0f, 2.0f, 3.0f, 5.0f };
-static int   g_presetCount = 4;
+static float g_presets[FNVSPD_MAX_PRESETS] = { 1.0f, 2.0f, 3.0f, 5.0f, 10.0f };
+static int   g_presetCount = 5;
 static int   g_presetIdx = 0;
 
 #define FNVSPD_MIN_SPEED 0.05

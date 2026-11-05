@@ -19,8 +19,11 @@ DEFAULT_INI = """[speedhack]
 HotkeyCycle=119
 HotkeyUp=120
 HotkeyDown=121
+; direct binds "vk:speed" - Numpad1..4 for Steam Deck back paddles
+; (Steam Input: L4->Num1 L5->Num2 R4->Num3 R5->Num4 = 1x/3x/5x/10x)
+SpeedKeys=97:1.0,98:3.0,99:5.0,100:10.0
 ; comma separated speed presets
-Presets=1.0,2.0,3.0,5.0
+Presets=1.0,2.0,3.0,5.0,10.0
 StartupSpeed=1.0
 ; file IPC (used by this Decky plugin)
 ControlFileEnabled=1

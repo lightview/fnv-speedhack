@@ -19,6 +19,12 @@
 
 typedef BOOL (__cdecl *NVSEPlugin_t)(void*);
 
+/* SpeedKeys bound in the test ini: F21=1x F22=3x F23=5x F24=10x */
+#define TEST_VK_1X   0x84
+#define TEST_VK_3X   0x85
+#define TEST_VK_5X   0x86
+#define TEST_VK_10X  0x87
+
 static BOOL g_failed = FALSE;
 
 static void check(const char* name, double value, double expected, double tol)
@@ -71,6 +77,25 @@ static double measure_tick_ratio(DWORD ms)
     realSec = (double)(r1 - r0) / 10000000.0;
     fakeSec = (double)(t1 - t0) / 1000.0;
     return fakeSec / realSec;
+}
+
+/* inject a key press, hold it past the hotkey poll interval, then release */
+static void send_key(BYTE vk)
+{
+    INPUT in;
+    memset(&in, 0, sizeof(in));
+    in.type = INPUT_KEYBOARD;
+
+    in.ki.wVk = vk;
+    if (!SendInput(1, &in, sizeof(INPUT))) {
+        printf("  SendInput failed (err=%lu)\n", GetLastError());
+        g_failed = TRUE;
+        return;
+    }
+    Sleep(100); /* hold > HotkeyPollMs (30 ms) so the poller sees the edge */
+
+    in.ki.dwFlags = KEYEVENTF_KEYUP;
+    SendInput(1, &in, sizeof(INPUT));
 }
 
 static void write_control(const char* root, const char* text)
@@ -157,6 +182,31 @@ int main(int argc, char** argv)
     write_control(dir, "reset\n");
     Sleep(700);
     check("QPC ratio after reset", measure_qpc_ratio(1000), 1.0, 0.15);
+
+    /* hotkey tests: inject F21..F24 like Steam Input paddles would */
+    if (argc >= 3 && strcmp(argv[2], "noinput") == 0) {
+        printf("[*] skipping hotkey injection tests (noinput)\n");
+    } else {
+        printf("[*] testing SpeedKeys hotkeys (injected F21..F24)\n");
+
+        send_key(TEST_VK_10X);
+        Sleep(500);
+        if (read_status(dir, &status))
+            check("status after 10x key", status, 10.0, 0.01);
+        check("QPC ratio after 10x key", measure_qpc_ratio(700), 10.0, 1.0);
+
+        send_key(TEST_VK_5X);
+        Sleep(500);
+        check("QPC ratio after 5x key", measure_qpc_ratio(700), 5.0, 0.5);
+
+        send_key(TEST_VK_3X);
+        Sleep(500);
+        check("QPC ratio after 3x key", measure_qpc_ratio(700), 3.0, 0.3);
+
+        send_key(TEST_VK_1X);
+        Sleep(500);
+        check("QPC ratio after 1x key", measure_qpc_ratio(700), 1.0, 0.15);
+    }
 
     if (g_failed) {
         printf("[FAIL] test failed\n");

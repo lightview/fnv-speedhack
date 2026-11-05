@@ -26,7 +26,7 @@ const setSpeed = callable<[v: number], boolean>("set_speed");
 const setGameDir = callable<[p: string], boolean>("set_game_dir");
 const installDll = callable<[], { ok: boolean; path?: string; error?: string }>("install_dll");
 
-const PRESETS: number[] = [0.5, 1, 1.5, 2, 3, 5];
+const PRESETS: number[] = [0.5, 1, 1.5, 2, 3, 5, 10];
 
 function Content() {
   const [status, setStatus] = useState<Status | null>(null);

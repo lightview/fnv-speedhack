@@ -4,10 +4,19 @@
 #include <windows.h>
 #include "hooks.h"
 
+#define FNVSPD_MAX_SPEEDKEYS 8
+
+typedef struct {
+    WORD  vk;                  /* virtual key code */
+    float speed;               /* speed applied when pressed */
+} SpeedKey;
+
 typedef struct {
     WORD  vkCycle;             /* VK code: cycle through presets (default F8)  */
     WORD  vkUp;                /* VK code: step up (default F9), 0 = disabled  */
     WORD  vkDown;              /* VK code: step down (default F10), 0 = off    */
+    SpeedKey speedKeys[FNVSPD_MAX_SPEEDKEYS]; /* direct "key -> speed" binds */
+    int   speedKeyCount;
     float presets[FNVSPD_MAX_PRESETS];
     int   presetCount;
     float startupSpeed;

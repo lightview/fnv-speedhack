@@ -1,22 +1,26 @@
 [speedhack]
-; VK codes (decimal). 0 disables a hotkey.
-; F8=119 F9=120 F10=121
-HotkeyCycle=119
-HotkeyUp=120
-HotkeyDown=121
+; --- hotkeys (VK codes, decimal or 0x-hex; 0 disables) ---
+HotkeyCycle=119   ; F8: cycle through presets
+HotkeyUp=120      ; F9: step up
+HotkeyDown=121    ; F10: step down
 
-; comma separated speed presets (max 16)
-Presets=1.0,2.0,3.0,5.0
+; direct binds "vk:speed" (max 8), fired on key press.
+; defaults are Numpad1..4 - meant for Steam Deck back paddles
+; (L4=L4->Num1 L5->Num2 R4->Num3 R5->Num4 in Steam Input):
+SpeedKeys=97:1.0,98:3.0,99:5.0,100:10.0
+
+; --- presets used by cycle/step and beep feedback (max 16) ---
+Presets=1.0,2.0,3.0,5.0,10.0
 
 ; speed applied when the plugin loads
 StartupSpeed=1.0
 
-; file IPC (used by the Steam Deck Decky plugin)
+; --- file IPC (used by the Steam Deck Decky plugin) ---
 ControlFileEnabled=1
 ControlPollMs=250
 HotkeyPollMs=30
 
-; short beep when the speed changes (one tone per preset)
+; short beep on speed change (one tone per preset)
 BeepFeedback=1
 
 ; write fnvspeed.log next to the DLL

@@ -55,8 +55,10 @@ static void apply_change(double v, const char* source)
     log_write("speed -> %.2f (%s)", v, source);
     write_status();
 
-    if (g_cfg.beepFeedback && idx >= 0)
-        Beep(700 + 300 * idx, 70);
+    if (g_cfg.beepFeedback) {
+        /* one tone per preset; a higher tone for custom values */
+        Beep(idx >= 0 ? 700 + 300 * idx : 1600, 70);
+    }
 }
 
 /* ---- hotkey thread ---- */
@@ -82,10 +84,15 @@ static int key_edge(WORD vk, BYTE* wasDown)
 static unsigned __stdcall hotkey_thread(void* arg)
 {
     BYTE prevCycle = 0, prevUp = 0, prevDown = 0;
+    BYTE prevKeys[FNVSPD_MAX_SPEEDKEYS] = { 0 };
+    int i;
 
     (void)arg;
     log_write("hotkey thread: cycle=%u up=%u down=%u",
               g_cfg.vkCycle, g_cfg.vkUp, g_cfg.vkDown);
+    for (i = 0; i < g_cfg.speedKeyCount; i++)
+        log_write("hotkey thread: vk %u -> %.1fx", g_cfg.speedKeys[i].vk,
+                  g_cfg.speedKeys[i].speed);
 
     while (WaitForSingleObject(g_stopEvent, g_cfg.hotkeyPollMs) == WAIT_TIMEOUT) {
         if (key_edge(g_cfg.vkCycle, &prevCycle))
@@ -94,6 +101,12 @@ static unsigned __stdcall hotkey_thread(void* arg)
             apply_change(speed_step(1), "hotkey up");
         if (key_edge(g_cfg.vkDown, &prevDown))
             apply_change(speed_step(-1), "hotkey down");
+
+        for (i = 0; i < g_cfg.speedKeyCount; i++) {
+            if (key_edge(g_cfg.speedKeys[i].vk, &prevKeys[i]))
+                apply_change(speed_set((double)g_cfg.speedKeys[i].speed),
+                             "hotkey speed");
+        }
     }
     return 0;
 }

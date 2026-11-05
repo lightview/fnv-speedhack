@@ -35,6 +35,35 @@ static void parse_presets(const char* s, float* out, int* count)
     }
 }
 
+/* parses "vk:speed,vk:speed,..." entries, VK in decimal or 0x-hex */
+static void parse_speedkeys(const char* s, SpeedKey* out, int* count)
+{
+    char* end;
+    double v;
+    unsigned long vk;
+
+    *count = 0;
+    while (*count < FNVSPD_MAX_SPEEDKEYS) {
+        while (*s == ',' || *s == ';' || *s == ' ' || *s == '\t')
+            s++;
+        if (*s == 0)
+            break;
+        vk = strtoul(s, &end, 0);
+        if (end == s)
+            break;
+        s = end;
+        while (*s == ':' || *s == '=' || *s == ' ')
+            s++;
+        v = strtod(s, &end);
+        if (end == s || v <= 0.0)
+            break;
+        s = end;
+        out[*count].vk = (WORD)vk;
+        out[*count].speed = (float)v;
+        (*count)++;
+    }
+}
+
 void cfg_load(const char* dllDir, Config* cfg)
 {
     char iniPath[MAX_PATH];
@@ -49,13 +78,20 @@ void cfg_load(const char* dllDir, Config* cfg)
     cfg->vkUp    = get_vk(iniPath, "HotkeyUp",    "120"); /* F9  */
     cfg->vkDown  = get_vk(iniPath, "HotkeyDown",  "121"); /* F10 */
 
-    GetPrivateProfileStringA(INI_SECTION, "Presets", "1.0,2.0,3.0,5.0",
+    /* direct binds: default Numpad1..4 = 1x/3x/5x/10x (Steam Deck back paddles) */
+    GetPrivateProfileStringA(INI_SECTION, "SpeedKeys",
+                             "97:1.0,98:3.0,99:5.0,100:10.0",
+                             buf, sizeof(buf), iniPath);
+    parse_speedkeys(buf, cfg->speedKeys, &cfg->speedKeyCount);
+
+    GetPrivateProfileStringA(INI_SECTION, "Presets", "1.0,2.0,3.0,5.0,10.0",
                              buf, sizeof(buf), iniPath);
     parse_presets(buf, cfg->presets, &cfg->presetCount);
     if (cfg->presetCount == 0) {
         cfg->presets[0] = 1.0f; cfg->presets[1] = 2.0f;
         cfg->presets[2] = 3.0f; cfg->presets[3] = 5.0f;
-        cfg->presetCount = 4;
+        cfg->presets[4] = 10.0f;
+        cfg->presetCount = 5;
     }
 
     GetPrivateProfileStringA(INI_SECTION, "StartupSpeed", "1.0",
