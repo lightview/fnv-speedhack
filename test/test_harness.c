@@ -130,17 +130,25 @@ int main(int argc, char** argv)
 {
     char dir[MAX_PATH];
     char dllPath[MAX_PATH];
+    int proxyMode = 0;
     HMODULE dll;
     NVSEPlugin_t plugin;
     double status;
 
     if (argc < 2) {
-        printf("usage: test_harness.exe <dir containing Data\\NVSE\\Plugins\\FNVSpeedhack.dll>\n");
+        printf("usage: test_harness.exe <dir> [proxy] [noinput]\n");
         return 2;
     }
     strncpy(dir, argv[1], MAX_PATH - 1);
     dir[MAX_PATH - 1] = 0;
-    _snprintf(dllPath, sizeof(dllPath), "%s\\Data\\NVSE\\Plugins\\FNVSpeedhack.dll", dir);
+    if (argc >= 3 && strcmp(argv[2], "proxy") == 0)
+        proxyMode = 1;
+
+    if (proxyMode) {
+        _snprintf(dllPath, sizeof(dllPath), "%s\\dinput8.dll", dir);
+    } else {
+        _snprintf(dllPath, sizeof(dllPath), "%s\\Data\\NVSE\\Plugins\\FNVSpeedhack.dll", dir);
+    }
 
     printf("[*] loading %s\n", dllPath);
     dll = LoadLibraryA(dllPath);
@@ -149,12 +157,27 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    plugin = (NVSEPlugin_t)GetProcAddress(dll, "NVSEPlugin");
-    if (!plugin || !plugin(NULL)) {
-        printf("[!] NVSEPlugin init failed\n");
-        return 1;
+    if (proxyMode) {
+        /* the proxy defers init to the first DirectInput8Create call */
+        typedef HRESULT (WINAPI *DI8C)(HINSTANCE, DWORD, const void*, void**, void*);
+        DI8C di8;
+        GUID zeroGuid = { 0, 0, 0, { 0, 0, 0, 0, 0, 0, 0, 0 } };
+        void* p = NULL;
+        di8 = (DI8C)GetProcAddress(dll, "DirectInput8Create");
+        if (!di8) {
+            printf("[!] no DirectInput8Create export\n");
+            return 1;
+        }
+        di8(GetModuleHandleA(NULL), 0x0800, &zeroGuid, &p, NULL);
+        printf("[*] proxy initialised via DirectInput8Create\n");
+    } else {
+        plugin = (NVSEPlugin_t)GetProcAddress(dll, "NVSEPlugin");
+        if (!plugin || !plugin(NULL)) {
+            printf("[!] NVSEPlugin init failed\n");
+            return 1;
+        }
+        printf("[*] plugin initialised\n");
     }
-    printf("[*] plugin initialised\n");
 
     Sleep(300);
     printf("[*] measuring at default speed...\n");

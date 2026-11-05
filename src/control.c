@@ -215,12 +215,29 @@ BOOL control_start(HMODULE hSelf, const Config* cfg)
     strncpy(g_dllDir, path, MAX_PATH - 1);
     g_dllDir[MAX_PATH - 1] = 0;
 
-    /* game root: Data\NVSE\Plugins -> ..\..\.. */
-    _snprintf(path, sizeof(path), "%s\\..\\..\\..", g_dllDir);
-    path[sizeof(path) - 1] = 0;
-    if (!GetFullPathNameA(path, MAX_PATH, g_gameRoot, NULL)) {
-        log_write("cannot resolve game root");
-        return FALSE;
+    /* game root: NVSE plugin lives in Data\NVSE\Plugins -> ..\..\..;
+     * the dinput8 proxy lives in the game root itself. */
+    {
+        char cand[MAX_PATH];
+        char root[MAX_PATH];
+        char dataDir[MAX_PATH];
+
+        _snprintf(cand, sizeof(cand), "%s\\..\\..\\..", g_dllDir);
+        cand[sizeof(cand) - 1] = 0;
+        if (GetFullPathNameA(cand, MAX_PATH, root, NULL)) {
+            _snprintf(dataDir, sizeof(dataDir), "%s\\Data", root);
+            dataDir[sizeof(dataDir) - 1] = 0;
+            if (GetFileAttributesA(dataDir) != INVALID_FILE_ATTRIBUTES) {
+                strncpy(g_gameRoot, root, MAX_PATH - 1);
+                g_gameRoot[MAX_PATH - 1] = 0;
+            } else {
+                strncpy(g_gameRoot, g_dllDir, MAX_PATH - 1);
+                g_gameRoot[MAX_PATH - 1] = 0;
+            }
+        } else {
+            log_write("cannot resolve game root");
+            return FALSE;
+        }
     }
 
     _snprintf(g_ctlPath,    sizeof(g_ctlPath),    "%s\\fnvspeed.txt", g_gameRoot);

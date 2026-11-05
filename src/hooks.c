@@ -166,9 +166,19 @@ static DWORD WINAPI Hooked_timeGetTime(void)
 
 /* ---- install / shutdown ---- */
 
+/* One live speedhack per process: the NVSE plugin and the dinput8 proxy may
+ * both be present (MO2 setups), the second one to load must stay passive. */
+static HANDLE g_singleton = NULL;
+
 BOOL hooks_install(void)
 {
     HMODULE winmm;
+
+    g_singleton = CreateMutexA(NULL, TRUE, "FNVSpeedhack_SingleInstance");
+    if (g_singleton && GetLastError() == ERROR_ALREADY_EXISTS) {
+        log_write("another FNVSpeedhack instance is active - staying passive");
+        return FALSE;
+    }
 
     InitializeCriticalSection(&g_cs);
 
@@ -227,6 +237,10 @@ void hooks_shutdown(void)
     MH_DisableHook(MH_ALL_HOOKS);
     MH_Uninitialize();
     DeleteCriticalSection(&g_cs);
+    if (g_singleton) {
+        CloseHandle(g_singleton);
+        g_singleton = NULL;
+    }
 }
 
 DWORD hooks_real_time_ms(void)
