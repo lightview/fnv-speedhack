@@ -18,6 +18,7 @@ rm -rf release
 mkdir -p "$STAGE/dist"
 
 cp decky/fnv-speed/plugin.json "$STAGE/"
+cp decky/fnv-speed/package.json "$STAGE/"
 cp decky/fnv-speed/main.py "$STAGE/"
 cp decky/fnv-speed/dist/index.js "$STAGE/dist/index.js"
 cp decky/fnv-speed/LICENSE "$STAGE/" 2>/dev/null || true
