@@ -5,9 +5,9 @@ HotkeyUp=120      ; F9: step up
 HotkeyDown=121    ; F10: step down
 
 ; direct binds "vk:speed" (max 8), fired on key press.
-; defaults cover Numpad1..4 (Steam Deck paddles via Steam Input) and
-; top-row 1..4 as a fallback:
-SpeedKeys=97:1.0,98:3.0,99:5.0,100:10.0,49:1.0,50:3.0,51:5.0,52:10.0
+; defaults are Numpad1..4 (Steam Deck paddles via Steam Input);
+; do NOT use top-row digits - they are weapon/ammo hotkeys in FNV:
+SpeedKeys=97:1.0,98:3.0,99:5.0,100:10.0
 
 ; gamepad combos: hold the modifier, then tap a face button.
 ; works without any Steam Input bindings (read straight from XInput).

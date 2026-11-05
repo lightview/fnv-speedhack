@@ -78,11 +78,9 @@ void cfg_load(const char* dllDir, Config* cfg)
     cfg->vkUp    = get_vk(iniPath, "HotkeyUp",    "120"); /* F9  */
     cfg->vkDown  = get_vk(iniPath, "HotkeyDown",  "121"); /* F10 */
 
-    /* direct binds: Numpad1..4 AND top-row 1..4 both map to 1x/3x/5x/10x,
-     * covering either Steam Input keypad choice */
+    /* direct binds: Numpad1..4 only - top-row digits are game hotkeys in FNV */
     GetPrivateProfileStringA(INI_SECTION, "SpeedKeys",
-                             "97:1.0,98:3.0,99:5.0,100:10.0,"
-                             "49:1.0,50:3.0,51:5.0,52:10.0",
+                             "97:1.0,98:3.0,99:5.0,100:10.0",
                              buf, sizeof(buf), iniPath);
     parse_speedkeys(buf, cfg->speedKeys, &cfg->speedKeyCount);
 
