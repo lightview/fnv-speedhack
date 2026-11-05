@@ -1,0 +1,11 @@
+{
+  "name": "FNV Speed",
+  "author": "fnv-speedhack contributors",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": ["game", "fallout", "speedhack"],
+    "description": "Cheat Engine style game speed control (1x/2x/3x/5x...) for Fallout: New Vegas via a bundled NVSE plugin.",
+    "image": "https://opengraph.githubassets.com/1/SteamDeckHomebrew/PluginLoader"
+  }
+}

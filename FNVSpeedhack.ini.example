@@ -1,0 +1,23 @@
+[speedhack]
+; VK codes (decimal). 0 disables a hotkey.
+; F8=119 F9=120 F10=121
+HotkeyCycle=119
+HotkeyUp=120
+HotkeyDown=121
+
+; comma separated speed presets (max 16)
+Presets=1.0,2.0,3.0,5.0
+
+; speed applied when the plugin loads
+StartupSpeed=1.0
+
+; file IPC (used by the Steam Deck Decky plugin)
+ControlFileEnabled=1
+ControlPollMs=250
+HotkeyPollMs=30
+
+; short beep when the speed changes (one tone per preset)
+BeepFeedback=1
+
+; write fnvspeed.log next to the DLL
+LogEnabled=1

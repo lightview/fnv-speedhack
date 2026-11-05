@@ -1,0 +1,44 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mingw-w64 i686
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-i686
+
+      - name: Build DLL
+        run: sh build.sh
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build Decky plugin frontend
+        working-directory: decky/fnv-speed
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Package Decky plugin zip
+        run: sh pack-decky.sh
+
+      - name: Upload DLL
+        uses: actions/upload-artifact@v4
+        with:
+          name: FNVSpeedhack.dll
+          path: FNVSpeedhack.dll
+
+      - name: Upload Decky plugin zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: fnv-speed-decky-plugin
+          path: release/fnv-speed.zip
