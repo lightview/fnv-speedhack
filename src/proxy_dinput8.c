@@ -54,6 +54,7 @@ static BOOL resolve_real(void)
 {
     char path[MAX_PATH];
     UINT n;
+    HMODULE real;
 
     if (g_realResolved)
         return (p_DirectInput8Create != NULL);
@@ -65,22 +66,28 @@ static BOOL resolve_real(void)
         return FALSE;
     lstrcatA(path, "\\dinput8.dll");
 
-    HMODULE real = LoadLibraryA(path);
+    real = LoadLibraryA(path);
     if (!real) {
         log_write("cannot load real dinput8 from %s (err %u)", path, GetLastError());
         return FALSE;
     }
 
-#define RESOLVE(name, var) \
-    var = (void*)(FARPROC)GetProcAddress(real, name); \
-    if (!var) { log_write("missing export %s", name); return FALSE; }
-    RESOLVE("DirectInput8Create", p_DirectInput8Create)
-    RESOLVE("DllCanUnloadNow", p_DllCanUnloadNow)
-    RESOLVE("DllGetClassObject", p_DllGetClassObject)
-    RESOLVE("DllRegisterServer", p_DllRegisterServer)
-    RESOLVE("DllUnregisterServer", p_DllUnregisterServer)
-    RESOLVE("GetdfDIJoystick", p_GetdfDIJoystick)
-#undef RESOLVE
+    /* DirectInput8Create is the only export the game truly needs.
+     * The rest resolve independently: Wine's builtin dinput8 has no
+     * GetdfDIJoystick, and its absence must not break input. */
+    p_DirectInput8Create =
+        (DI8CREATE)(FARPROC)GetProcAddress(real, "DirectInput8Create");
+    if (!p_DirectInput8Create) {
+        log_write("missing export DirectInput8Create");
+        return FALSE;
+    }
+    p_DllCanUnloadNow     = (DI0VOID)(FARPROC)GetProcAddress(real, "DllCanUnloadNow");
+    p_DllGetClassObject   = (DI0CLS)(FARPROC)GetProcAddress(real, "DllGetClassObject");
+    p_DllRegisterServer   = (DI0VOID)(FARPROC)GetProcAddress(real, "DllRegisterServer");
+    p_DllUnregisterServer = (DI0VOID)(FARPROC)GetProcAddress(real, "DllUnregisterServer");
+    p_GetdfDIJoystick     = (DI0DF)(FARPROC)GetProcAddress(real, "GetdfDIJoystick");
+    if (!p_GetdfDIJoystick)
+        log_write("GetdfDIJoystick unavailable in real dinput8 (ok)");
     return TRUE;
 }
 
