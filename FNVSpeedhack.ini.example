@@ -5,9 +5,18 @@ HotkeyUp=120      ; F9: step up
 HotkeyDown=121    ; F10: step down
 
 ; direct binds "vk:speed" (max 8), fired on key press.
-; defaults are Numpad1..4 - meant for Steam Deck back paddles
-; (L4=L4->Num1 L5->Num2 R4->Num3 R5->Num4 in Steam Input):
-SpeedKeys=97:1.0,98:3.0,99:5.0,100:10.0
+; defaults cover Numpad1..4 (Steam Deck paddles via Steam Input) and
+; top-row 1..4 as a fallback:
+SpeedKeys=97:1.0,98:3.0,99:5.0,100:10.0,49:1.0,50:3.0,51:5.0,52:10.0
+
+; gamepad combos: hold the modifier, then tap a face button.
+; works without any Steam Input bindings (read straight from XInput).
+; modifier buttons: LB RB A B X Y BACK START UP DOWN LEFT RIGHT L3 R3; "" = off
+PadModifier=LB+RB
+PadA=1.0
+PadB=3.0
+PadX=5.0
+PadY=10.0
 
 ; --- presets used by cycle/step and beep feedback (max 16) ---
 Presets=1.0,2.0,3.0,5.0,10.0

@@ -78,11 +78,25 @@ void cfg_load(const char* dllDir, Config* cfg)
     cfg->vkUp    = get_vk(iniPath, "HotkeyUp",    "120"); /* F9  */
     cfg->vkDown  = get_vk(iniPath, "HotkeyDown",  "121"); /* F10 */
 
-    /* direct binds: default Numpad1..4 = 1x/3x/5x/10x (Steam Deck back paddles) */
+    /* direct binds: Numpad1..4 AND top-row 1..4 both map to 1x/3x/5x/10x,
+     * covering either Steam Input keypad choice */
     GetPrivateProfileStringA(INI_SECTION, "SpeedKeys",
-                             "97:1.0,98:3.0,99:5.0,100:10.0",
+                             "97:1.0,98:3.0,99:5.0,100:10.0,"
+                             "49:1.0,50:3.0,51:5.0,52:10.0",
                              buf, sizeof(buf), iniPath);
     parse_speedkeys(buf, cfg->speedKeys, &cfg->speedKeyCount);
+
+    /* gamepad combos: LB+RB held, then A/B/X/Y - no Steam Input needed */
+    GetPrivateProfileStringA(INI_SECTION, "PadModifier", "LB+RB",
+                             cfg->padModifier, sizeof(cfg->padModifier), iniPath);
+    GetPrivateProfileStringA(INI_SECTION, "PadA", "1.0", buf, sizeof(buf), iniPath);
+    cfg->padA = (float)strtod(buf, NULL);
+    GetPrivateProfileStringA(INI_SECTION, "PadB", "3.0", buf, sizeof(buf), iniPath);
+    cfg->padB = (float)strtod(buf, NULL);
+    GetPrivateProfileStringA(INI_SECTION, "PadX", "5.0", buf, sizeof(buf), iniPath);
+    cfg->padX = (float)strtod(buf, NULL);
+    GetPrivateProfileStringA(INI_SECTION, "PadY", "10.0", buf, sizeof(buf), iniPath);
+    cfg->padY = (float)strtod(buf, NULL);
 
     GetPrivateProfileStringA(INI_SECTION, "Presets", "1.0,2.0,3.0,5.0,10.0",
                              buf, sizeof(buf), iniPath);

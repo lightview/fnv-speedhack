@@ -19,7 +19,7 @@
 #include "control.h"
 #include "log.h"
 
-#define FNVSPD_PROXY_VERSION "0.2.0-proxy"
+#define FNVSPD_PROXY_VERSION "0.3.0-proxy"
 
 typedef HRESULT(WINAPI *DI8CREATE)(HINSTANCE, DWORD, const void*, void**, void*);
 typedef HRESULT(WINAPI *DI0VOID)(void);

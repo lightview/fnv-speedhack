@@ -16,6 +16,7 @@
 #include "control.h"
 #include "hooks.h"
 #include "log.h"
+#include "xinput_pad.h"
 
 static HANDLE g_stopEvent = NULL;
 static HANDLE g_hkThread  = NULL;
@@ -93,6 +94,10 @@ static unsigned __stdcall hotkey_thread(void* arg)
     for (i = 0; i < g_cfg.speedKeyCount; i++)
         log_write("hotkey thread: vk %u -> %.1fx", g_cfg.speedKeys[i].vk,
                   g_cfg.speedKeys[i].speed);
+    if (pad_init(&g_cfg))
+        log_write("hotkey thread: pad combos LB+RB + A/B/X/Y active");
+    else
+        log_write("hotkey thread: gamepad combos unavailable");
 
     while (WaitForSingleObject(g_stopEvent, g_cfg.hotkeyPollMs) == WAIT_TIMEOUT) {
         if (key_edge(g_cfg.vkCycle, &prevCycle))
@@ -107,6 +112,8 @@ static unsigned __stdcall hotkey_thread(void* arg)
                 apply_change(speed_set((double)g_cfg.speedKeys[i].speed),
                              "hotkey speed");
         }
+
+        pad_tick(apply_change);
     }
     return 0;
 }

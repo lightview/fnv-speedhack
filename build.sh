@@ -19,7 +19,7 @@ echo "[*] compiler: $("$CC" -dumpversion) ($(command -v "$CC"))"
 mkdir -p build dist
 
 CFLAGS="-O2 -Wall -Wextra -Ithird_party/minhook/include -Isrc"
-COMMON="src/hooks.c src/config.c src/control.c src/log.c \
+COMMON="src/hooks.c src/config.c src/control.c src/log.c src/xinput_pad.c \
 third_party/minhook/src/hook.c \
 third_party/minhook/src/buffer.c \
 third_party/minhook/src/trampoline.c \

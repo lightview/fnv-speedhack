@@ -13,7 +13,7 @@
 #include "control.h"
 #include "log.h"
 
-#define FNVSPD_VERSION "0.2.0"
+#define FNVSPD_VERSION "0.3.0"
 
 static HMODULE g_hSelf = NULL;
 
