@@ -125,8 +125,15 @@ class Plugin:
             "game_dir": game_dir,
             "dll_installed": dll_installed,
             "speed": speed,
+            "notify": bool(settings.get("notify", True)),
             "candidates": await self.autodetect(),
         }
+
+    async def set_notify(self, v: bool) -> bool:
+        settings = _load_settings()
+        settings["notify"] = bool(v)
+        _save_settings(settings)
+        return bool(v)
 
     async def autodetect(self) -> list[str]:
         return _detect_candidates()

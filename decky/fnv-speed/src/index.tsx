@@ -4,6 +4,7 @@ import {
   PanelSection,
   PanelSectionRow,
   TextField,
+  ToggleField,
   Focusable,
   staticClasses
 } from "@decky/ui";
@@ -12,19 +13,21 @@ import {
   definePlugin,
   toaster
 } from "@decky/api";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FaTachometerAlt } from "react-icons/fa";
 
 interface Status {
   game_dir: string | null;
   dll_installed: boolean;
   speed: number | null;
+  notify: boolean;
   candidates: string[];
 }
 
 const getStatus = callable<[], Status>("get_status");
 const setSpeed = callable<[v: number], boolean>("set_speed");
 const setGameDir = callable<[p: string], boolean>("set_game_dir");
+const setNotify = callable<[v: boolean], boolean>("set_notify");
 const installDll = callable<[], { ok: boolean; path?: string; error?: string }>("install_dll");
 
 const PRESETS: number[] = [0.5, 1, 1.5, 2, 3, 5, 10];
@@ -34,6 +37,7 @@ function Content() {
   const [pathInput, setPathInput] = useState("");
   const [selectedCandidate, setSelectedCandidate] = useState<string>("");
   const [busy, setBusy] = useState(false);
+  const lastSpeed = useRef<number | null>(null);
 
   const refresh = async () => {
     try {
@@ -42,6 +46,13 @@ function Content() {
       if (s.game_dir) setPathInput(s.game_dir);
       if (s.candidates.length > 0 && !selectedCandidate) {
         setSelectedCandidate(s.candidates[0]);
+      }
+      // toast on speed changes coming from anywhere: paddles, file, DLL itself
+      if (s.speed != null) {
+        if (lastSpeed.current != null && s.speed !== lastSpeed.current && s.notify) {
+          toaster.toast({ title: "FNV Speed", body: `→ ${s.speed}x` });
+        }
+        lastSpeed.current = s.speed;
       }
     } catch (e) {
       console.error("get_status failed:", e);
@@ -58,9 +69,7 @@ function Content() {
     setBusy(true);
     try {
       const ok = await setSpeed(v);
-      if (ok) {
-        toaster.toast({ title: "FNV Speed", body: `→ ${v}x` });
-      } else {
+      if (!ok) {
         toaster.toast({ title: "FNV Speed", body: "Game folder not set!" });
       }
     } finally {
@@ -134,6 +143,18 @@ function Content() {
     }
   };
 
+  const toggleNotify = async (v: boolean) => {
+    try {
+      await setNotify(v);
+      setStatus((prev) => (prev ? { ...prev, notify: v } : prev));
+      if (v) {
+        toaster.toast({ title: "FNV Speed", body: "Notifications on" });
+      }
+    } catch (e) {
+      console.error("set_notify failed:", e);
+    }
+  };
+
   return (
     <PanelSection title="FNV Speed">
       <PanelSectionRow>
@@ -168,6 +189,15 @@ function Content() {
         <ButtonItem layout="below" onClick={doInstall} disabled={busy || !status?.game_dir}>
           Install NVSE plugin DLL
         </ButtonItem>
+      </PanelSectionRow>
+
+      <PanelSectionRow>
+        <ToggleField
+          label="Toast on speed change"
+          description="Shows a notification whenever the speed changes (paddles, menu, file)"
+          checked={status?.notify !== false}
+          onChange={(v) => toggleNotify(v)}
+        />
       </PanelSectionRow>
 
       {status && status.candidates.length > 1 && (
