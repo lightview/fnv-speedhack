@@ -15,11 +15,11 @@ cd "$(dirname "$0")"
 
 STAGE=release/fnv-speed
 rm -rf release
-mkdir -p "$STAGE"
+mkdir -p "$STAGE/dist"
 
 cp decky/fnv-speed/plugin.json "$STAGE/"
 cp decky/fnv-speed/main.py "$STAGE/"
-cp decky/fnv-speed/dist/index.js "$STAGE/"
+cp decky/fnv-speed/dist/index.js "$STAGE/dist/index.js"
 cp decky/fnv-speed/LICENSE "$STAGE/" 2>/dev/null || true
 cp LICENSE "$STAGE/LICENSE"
 cp README.md "$STAGE/README.md"
