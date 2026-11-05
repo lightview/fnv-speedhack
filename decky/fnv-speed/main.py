@@ -100,21 +100,42 @@ def _detect_candidates() -> list[str]:
     for root in _steam_roots():
         for library in _library_paths(root):
             for gd in _game_dirs_in_library(library):
-                if gd not in found:
-                    found.append(gd)
+                real = os.path.realpath(gd)
+                if real not in found:
+                    found.append(real)
     return found
+
+
+def _pick_candidate(candidates: list[str]) -> str | None:
+    """Prefer the localized copy (e.g. enplczru) when the account plays one."""
+    for c in candidates:
+        if c.rstrip("/").endswith("enplczru"):
+            return c
+    return candidates[0] if candidates else None
 
 
 class Plugin:
     async def get_status(self) -> dict:
         settings = _load_settings()
         game_dir = settings.get("game_dir") or None
+
+        # self-heal: on first run pick the game automatically, no manual path
+        if not game_dir:
+            candidates = await self.autodetect()
+            best = _pick_candidate(candidates)
+            if best:
+                settings["game_dir"] = best
+                _save_settings(settings)
+                game_dir = best
+                decky.logger.info("auto-selected game dir: %s", best)
+
         dll_installed = False
         speed = None
-
         if game_dir:
-            dll_installed = os.path.isfile(
-                os.path.join(game_dir, "Data", "NVSE", "Plugins", DLL_NAME))
+            dll_installed = (
+                os.path.isfile(os.path.join(game_dir, DLL_NAME))          # dinput8 proxy
+                or os.path.isfile(os.path.join(game_dir, "Data", "NVSE",
+                                               "Plugins", DLL_NAME)))    # NVSE plugin
             try:
                 with open(os.path.join(game_dir, STATUS_FILE), "r") as f:
                     speed = float(f.read().strip())
