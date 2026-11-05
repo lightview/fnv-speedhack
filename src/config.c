@@ -84,8 +84,9 @@ void cfg_load(const char* dllDir, Config* cfg)
                              buf, sizeof(buf), iniPath);
     parse_speedkeys(buf, cfg->speedKeys, &cfg->speedKeyCount);
 
-    /* gamepad combos: LB+RB held, then A/B/X/Y - no Steam Input needed */
-    GetPrivateProfileStringA(INI_SECTION, "PadModifier", "LB+RB",
+    /* gamepad combos are off by default - the Decky plugin reads the Deck's
+     * back paddles from hidraw directly, which needs no modifier at all */
+    GetPrivateProfileStringA(INI_SECTION, "PadModifier", "",
                              cfg->padModifier, sizeof(cfg->padModifier), iniPath);
     GetPrivateProfileStringA(INI_SECTION, "PadA", "1.0", buf, sizeof(buf), iniPath);
     cfg->padA = (float)strtod(buf, NULL);

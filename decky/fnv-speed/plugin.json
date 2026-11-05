@@ -1,7 +1,7 @@
 {
   "name": "FNV Speed",
   "author": "fnv-speedhack contributors",
-  "flags": [],
+  "flags": ["root"],
   "api_version": 1,
   "publish": {
     "tags": ["game", "fallout", "speedhack"],

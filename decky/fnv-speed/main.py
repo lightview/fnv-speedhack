@@ -4,6 +4,9 @@ import json
 import glob
 import shutil
 import asyncio
+import select
+import threading
+import time
 
 import decky
 
@@ -14,6 +17,15 @@ GAME_EXE = "FalloutNV.exe"
 # Steam installs localized FNV depots into suffixed folders; which one runs
 # depends on the account language (e.g. "russian" -> enplczru)
 GAME_SUBDIRS = ["Fallout New Vegas", "Fallout New Vegas enplczru"]
+
+# Steam Deck controller hidraw: L4/L5/R4/R5 in the 0x09 input report
+# (same layout as the kernel's hid-steam.c). Read straight from the device,
+# so paddle presses work with no Steam Input bindings at all.
+VALVE_DECK_HID_ID = "000028DE:00001205"
+DECK_INPUT_REPORT = 0x09
+PAD_BUTTONS = {"L4": (13, 1), "R4": (13, 2), "L5": (9, 7), "R5": (10, 0)}
+PAD_SPEEDS = {"L4": 1.0, "L5": 3.0, "R4": 5.0, "R5": 10.0}
+TOGGLE_COOLDOWN = 0.6
 
 DEFAULT_INI = """[speedhack]
 ; VK codes (decimal). 0 disables a hotkey.
@@ -114,6 +126,97 @@ def _pick_candidate(candidates: list[str]) -> str | None:
     return candidates[0] if candidates else None
 
 
+def _deck_hidraw_node() -> str | None:
+    for path in sorted(glob.glob("/sys/class/hidraw/hidraw*")):
+        try:
+            with open(os.path.join(path, "device", "uevent"), "r") as f:
+                if VALVE_DECK_HID_ID in f.read().upper():
+                    return "/dev/" + os.path.basename(path)
+        except OSError:
+            continue
+    return None
+
+
+def _open_input_node() -> int | None:
+    """Several hidraw nodes exist; only one streams the 0x09 input report."""
+    node = _deck_hidraw_node()
+    if not node:
+        return None
+    fd = os.open(node, os.O_RDONLY | os.O_NONBLOCK)
+    deadline = time.monotonic() + 0.5
+    while time.monotonic() < deadline:
+        ready, _, _ = select.select([fd], [], [], 0.1)
+        if not ready:
+            continue
+        try:
+            report = os.read(fd, 64)
+        except OSError:
+            break
+        if len(report) >= 16 and report[2] == DECK_INPUT_REPORT:
+            return fd
+    os.close(fd)
+    return None
+
+
+class PadListener(threading.Thread):
+    """Fires on_speed(name) once per press of a back paddle, from hidraw."""
+
+    def __init__(self, on_speed, log):
+        super().__init__(name="FnvSpeedPaddles", daemon=True)
+        self._on_speed = on_speed
+        self._log = log
+        self._stop = threading.Event()
+
+    def start(self):
+        super().start()
+
+    def stop(self):
+        self._stop.set()
+        self.join(timeout=2)
+
+    def _run(self):
+        fd = None
+        announced = False
+        was_down = None
+        last_toggle = 0.0
+        while not self._stop.is_set():
+            if fd is None:
+                fd = _open_input_node()
+                if fd is None:
+                    if not announced:
+                        self._log("[!] Steam Deck controller hidraw not found; paddle speed keys off.")
+                        announced = True
+                    self._stop.wait(3.0)
+                    continue
+                announced = False
+                was_down = None
+            try:
+                ready, _, _ = select.select([fd], [], [], 0.5)
+                if not ready:
+                    continue
+                report = os.read(fd, 64)
+            except OSError:
+                os.close(fd)
+                fd = None  # suspend/resume re-enumerates the controller
+                self._stop.wait(1.0)
+                continue
+            if len(report) < 16 or report[2] != DECK_INPUT_REPORT:
+                continue
+            down = {name for name, (byte, bit) in PAD_BUTTONS.items()
+                    if report[byte] & (1 << bit)}
+            now = time.monotonic()
+            if down != was_down and down and now - last_toggle >= TOGGLE_COOLDOWN:
+                last_toggle = now
+                for name in sorted(down):
+                    try:
+                        self._on_speed(name)
+                    except Exception as exc:
+                        self._log(f"[-] paddle action failed: {exc}")
+            was_down = down
+        if fd is not None:
+            os.close(fd)
+
+
 class Plugin:
     async def get_status(self) -> dict:
         settings = _load_settings()
@@ -206,10 +309,24 @@ class Plugin:
             return {"ok": False, "error": str(e)}
 
     async def _main(self):
+        self.loop = asyncio.get_running_loop()
+        self.paddles = PadListener(self._on_paddle, decky.logger.info)
+        self.paddles.start()
         decky.logger.info("FNV Speed plugin loaded")
 
+    def _on_paddle(self, name: str) -> None:
+        speed = PAD_SPEEDS.get(name)
+        if not speed:
+            return
+        ok = asyncio.run_coroutine_threadsafe(
+            self.set_speed(speed), self.loop).result(timeout=5)
+        decky.logger.info("paddle %s -> %.2fx (%s)",
+                          name, speed, "written" if ok else "no game dir")
+
     async def _unload(self):
+        self.paddles.stop()
         decky.logger.info("FNV Speed plugin unloaded")
 
     async def _uninstall(self):
+        self.paddles.stop()
         pass

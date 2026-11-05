@@ -9,10 +9,10 @@ HotkeyDown=121    ; F10: step down
 ; do NOT use top-row digits - they are weapon/ammo hotkeys in FNV:
 SpeedKeys=97:1.0,98:3.0,99:5.0,100:10.0
 
-; gamepad combos: hold the modifier, then tap a face button.
-; works without any Steam Input bindings (read straight from XInput).
-; modifier buttons: LB RB A B X Y BACK START UP DOWN LEFT RIGHT L3 R3; "" = off
-PadModifier=LB+RB
+; gamepad combos: hold the modifier, then tap a face button (XInput).
+; off by default - on Steam Deck the Decky plugin reads the back paddles
+; from hidraw directly, which is strictly better. "" disables:
+PadModifier=
 PadA=1.0
 PadB=3.0
 PadX=5.0
