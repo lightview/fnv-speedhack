@@ -7,12 +7,25 @@
 set -e
 cd "$(dirname "$0")"
 
-CC="${CC:-gcc}"
-command -v "$CC" >/dev/null 2>&1 || CC=i686-w64-mingw32-gcc
+CC="${CC:-}"
+if [ -z "$CC" ]; then
+    # prefer the mingw cross compiler when present (Linux/CI); on a
+    # winlibs setup plain gcc already targets mingw
+    if command -v i686-w64-mingw32-gcc >/dev/null 2>&1; then
+        CC=i686-w64-mingw32-gcc
+    else
+        CC=gcc
+    fi
+fi
 command -v "$CC" >/dev/null 2>&1 || {
     echo "[!] mingw gcc not found. Install winlibs MinGW-w64 i686 or set CC=path/to/gcc"
     exit 1
 }
+case "$("$CC" -dumpmachine)" in
+    *mingw*) ;;
+    *) echo "[!] $CC does not target mingw - set CC=.../i686-w64-mingw32-gcc"
+       exit 1 ;;
+esac
 
 echo "[*] compiler: $("$CC" -dumpversion) ($(command -v "$CC"))"
 
@@ -39,7 +52,8 @@ done
     -static-libgcc \
     src/fnvspeed.def \
     -luser32
-STRIP="$(dirname "$(command -v "$CC")")/strip.exe"
+STRIP="$(dirname "$(command -v "$CC")")/strip"
+command -v "$STRIP" >/dev/null 2>&1 || STRIP=i686-w64-mingw32-strip
 command -v "$STRIP" >/dev/null 2>&1 || STRIP=strip
 "$STRIP" FNVSpeedhack.dll
 echo "[OK] FNVSpeedhack.dll ($(ls -la FNVSpeedhack.dll | awk '{print $5}') bytes)"
