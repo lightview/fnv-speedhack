@@ -1,9 +1,9 @@
 import {
   ButtonItem,
-  Dropdown,
+  DropdownItem,
   PanelSection,
   PanelSectionRow,
-  TextField,
+  SliderField,
   ToggleField,
   Focusable,
   staticClasses
@@ -30,11 +30,23 @@ const setGameDir = callable<[p: string], boolean>("set_game_dir");
 const setNotify = callable<[v: boolean], boolean>("set_notify");
 const installDll = callable<[], { ok: boolean; path?: string; error?: string }>("install_dll");
 
-const PRESETS: number[] = [0.5, 1, 1.5, 2, 3, 5, 10];
+const PRESETS: number[] = [0.5, 1, 2, 3, 5, 10];
+const PADDLE_HINT = "L4 1x · L5 3x · R4 5x · R5 10x";
+
+function SpeedButton({ v, active, onClick }: { v: number; active: boolean; onClick: () => void }) {
+  return (
+    <div style={{ flex: "1 1 30%", minWidth: "90px" }}>
+      <ButtonItem onClick={onClick}>
+        <span style={active ? { fontWeight: "bold", fontSize: "1.1em" } : undefined}>
+          {v}x
+        </span>
+      </ButtonItem>
+    </div>
+  );
+}
 
 function Content() {
   const [status, setStatus] = useState<Status | null>(null);
-  const [pathInput, setPathInput] = useState("");
   const [selectedCandidate, setSelectedCandidate] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const lastSpeed = useRef<number | null>(null);
@@ -43,7 +55,6 @@ function Content() {
     try {
       const s = await getStatus();
       setStatus(s);
-      if (s.game_dir) setPathInput(s.game_dir);
       if (s.candidates.length > 0 && !selectedCandidate) {
         setSelectedCandidate(s.candidates[0]);
       }
@@ -78,64 +89,13 @@ function Content() {
     }
   };
 
-  const saveDir = async () => {
-    setBusy(true);
-    try {
-      const ok = await setGameDir(pathInput);
-      toaster.toast({
-        title: "FNV Speed",
-        body: ok ? "Game folder saved" : "FalloutNV.exe not found there!"
-      });
-    } finally {
-      setBusy(false);
-      refresh();
-    }
-  };
-
-  const doDetect = async () => {
-    setBusy(true);
-    try {
-      const s = await getStatus();
-      if (s.candidates.length > 0) {
-        await setGameDir(s.candidates[0]);
-        setSelectedCandidate(s.candidates[0]);
-        toaster.toast({
-          title: "FNV Speed",
-          body: s.candidates.length > 1
-            ? `Found ${s.candidates.length} copies - pick the right one below`
-            : `Found: ${s.candidates[0]}`
-        });
-      } else {
-        toaster.toast({ title: "FNV Speed", body: "No FNV installation found" });
-      }
-    } finally {
-      setBusy(false);
-      refresh();
-    }
-  };
-
-  const saveSelected = async () => {
-    if (!selectedCandidate) return;
-    setBusy(true);
-    try {
-      const ok = await setGameDir(selectedCandidate);
-      toaster.toast({
-        title: "FNV Speed",
-        body: ok ? "Game folder saved" : "Save failed"
-      });
-    } finally {
-      setBusy(false);
-      refresh();
-    }
-  };
-
   const doInstall = async () => {
     setBusy(true);
     try {
       const res = await installDll();
       toaster.toast({
         title: "FNV Speed",
-        body: res.ok ? "DLL installed" : `Install failed: ${res.error}`
+        body: res.ok ? "Speedhack installed" : `Install failed: ${res.error}`
       });
     } finally {
       setBusy(false);
@@ -155,91 +115,117 @@ function Content() {
     }
   };
 
+  const saveSelected = async () => {
+    if (!selectedCandidate) return;
+    setBusy(true);
+    try {
+      await setGameDir(selectedCandidate);
+    } finally {
+      setBusy(false);
+      refresh();
+    }
+  };
+
+  const sliderSpeed = (v: number) => {
+    // snap to common values so the slider rarely replaces typing exact numbers
+    const snapped = [0.5, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 15, 20].reduce((a, b) =>
+      Math.abs(b - v) < Math.abs(a - v) ? b : a
+    );
+    if (snapped !== status?.speed) applySpeed(snapped);
+  };
+
+  const active = status?.speed ?? null;
+
   return (
-    <PanelSection title="FNV Speed">
-      <PanelSectionRow>
-        <div style={{ textAlign: "center", fontSize: "1.4em", fontWeight: "bold" }}>
-          {status?.speed != null ? `${status.speed}x` : "—"}
-        </div>
-      </PanelSectionRow>
-
-      <PanelSectionRow>
-        <Focusable style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
-          {PRESETS.map((v) => (
-            <div key={v} style={{ flex: "1 1 30%", minWidth: "80px" }}>
-              <ButtonItem onClick={() => applySpeed(v)} disabled={busy}>
-                {v}x
-              </ButtonItem>
-            </div>
-          ))}
-        </Focusable>
-      </PanelSectionRow>
-
-      <PanelSectionRow>
-        <div style={{ fontSize: "0.85em", opacity: 0.7, padding: "4px" }}>
-          {status?.game_dir
-            ? status.dll_installed
-              ? "NVSE plugin installed ✓"
-              : "DLL not installed in game folder"
-            : "Game folder is not set"}
-        </div>
-      </PanelSectionRow>
-
-      <PanelSectionRow>
-        <ButtonItem layout="below" onClick={doInstall} disabled={busy || !status?.game_dir}>
-          Install NVSE plugin DLL
-        </ButtonItem>
-      </PanelSectionRow>
-
-      <PanelSectionRow>
-        <ToggleField
-          label="Toast on speed change"
-          description="Shows a notification whenever the speed changes (paddles, menu, file)"
-          checked={status?.notify !== false}
-          onChange={(v) => toggleNotify(v)}
-        />
-      </PanelSectionRow>
-
-      {status && status.candidates.length > 1 && (
+    <div>
+      <PanelSection title="Game Speed">
         <PanelSectionRow>
-          <Dropdown
-            label="Found copies"
-            options={status.candidates.map((c) => ({ value: c, label: c.split("/").pop() || c }))}
-            selected={selectedCandidate || status.candidates[0]}
-            onChange={({ value }) => setSelectedCandidate(value as string)}
+          <Focusable style={{ display: "flex", justifyContent: "center", gap: "8px" }}>
+            <span style={{ fontSize: "2em", fontWeight: "bold", minWidth: "70px", textAlign: "right" }}>
+              {active != null ? `${active}x` : "—"}
+            </span>
+          </Focusable>
+        </PanelSectionRow>
+
+        <PanelSectionRow>
+          <Focusable style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+            {PRESETS.slice(0, 3).map((v) => (
+              <SpeedButton key={v} v={v} active={active === v} onClick={() => applySpeed(v)} />
+            ))}
+          </Focusable>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <Focusable style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+            {PRESETS.slice(3, 6).map((v) => (
+              <SpeedButton key={v} v={v} active={active === v} onClick={() => applySpeed(v)} />
+            ))}
+          </Focusable>
+        </PanelSectionRow>
+
+        <PanelSectionRow>
+          <SliderField
+            label="Fine tune"
+            value={active ?? 1}
+            min={0.5}
+            max={20}
+            step={0.5}
+            onChange={(v: number) => sliderSpeed(v)}
           />
         </PanelSectionRow>
-      )}
-      {status && status.candidates.length > 1 && (
+
         <PanelSectionRow>
-          <ButtonItem layout="below" onClick={saveSelected} disabled={busy}>
-            Use selected copy
+          <div style={{ fontSize: "0.8em", opacity: 0.65, textAlign: "center", padding: "2px 0 6px" }}>
+            {PADDLE_HINT}
+          </div>
+        </PanelSectionRow>
+      </PanelSection>
+
+      <PanelSection title="Setup">
+        <PanelSectionRow>
+          <div style={{ fontSize: "0.85em", opacity: 0.75, padding: "2px 0" }}>
+            {status?.game_dir
+              ? status.dll_installed
+                ? `✓ installed · ${status.game_dir.split("/").pop()}`
+                : "✗ speedhack DLL not installed"
+              : "No game folder found"}
+          </div>
+        </PanelSectionRow>
+        <PanelSectionRow>
+          <ButtonItem layout="below" onClick={doInstall} disabled={busy || !status?.game_dir}>
+            {status?.dll_installed ? "Reinstall / repair" : "Install speedhack"}
           </ButtonItem>
         </PanelSectionRow>
-      )}
 
-      <PanelSectionRow>
-        <TextField
-          label="Game folder (path to FalloutNV.exe)"
-          value={pathInput}
-          onChange={(e) => setPathInput(e.target.value)}
-        />
-      </PanelSectionRow>
-      <PanelSectionRow>
-        <Focusable style={{ display: "flex", gap: "4px" }}>
-          <div style={{ flex: 1 }}>
-            <ButtonItem onClick={saveDir} disabled={busy}>
-              Save
+        {status && status.candidates.length > 1 && (
+          <PanelSectionRow>
+            <DropdownItem
+              label="Game copy"
+              rgOptions={status.candidates.map((c) => ({
+                data: c,
+                label: c.split("/").pop() || c,
+              }))}
+              selectedOption={selectedCandidate || status.candidates[0]}
+              onChange={(data) => setSelectedCandidate(String(data.data))}
+            />
+          </PanelSectionRow>
+        )}
+        {status && status.candidates.length > 1 && (
+          <PanelSectionRow>
+            <ButtonItem layout="below" onClick={saveSelected} disabled={busy}>
+              Use selected copy
             </ButtonItem>
-          </div>
-          <div style={{ flex: 1 }}>
-            <ButtonItem onClick={doDetect} disabled={busy}>
-              Auto-detect
-            </ButtonItem>
-          </div>
-        </Focusable>
-      </PanelSectionRow>
-    </PanelSection>
+          </PanelSectionRow>
+        )}
+
+        <PanelSectionRow>
+          <ToggleField
+            label="Toast on speed change"
+            checked={status?.notify !== false}
+            onChange={(v) => toggleNotify(v)}
+          />
+        </PanelSectionRow>
+      </PanelSection>
+    </div>
   );
 }
 

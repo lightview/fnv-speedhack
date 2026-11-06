@@ -11,6 +11,7 @@ import time
 import decky
 
 DLL_NAME = "FNVSpeedhack.dll"
+PROXY_NAME = "dinput8.dll"   # the speedhack ships as a dinput8 proxy on Deck
 CTL_FILE = "fnvspeed.txt"
 STATUS_FILE = "fnvspeed_status.txt"
 GAME_EXE = "FalloutNV.exe"
@@ -126,6 +127,55 @@ def _pick_candidate(candidates: list[str]) -> str | None:
     return candidates[0] if candidates else None
 
 
+def _patch_prefix_overrides(game_dir: str) -> list[str]:
+    """Add dinput8=native,builtin to the Wine overrides of every Proton
+    prefix whose appmanifest installdir matches this game copy. Wine merges
+    duplicate [DllOverrides] sections, so appending is safe. Returns appids."""
+    installdir = os.path.basename(game_dir.rstrip("/"))
+    steamapps = os.path.dirname(os.path.dirname(game_dir))  # ../.. of common/
+    compatdata = os.path.join(os.path.dirname(steamapps), "compatdata")
+
+    appids = []
+    try:
+        for entry in os.listdir(steamapps):
+            m = re.match(r"appmanifest_(\d+)\.acf$", entry)
+            if not m:
+                continue
+            try:
+                with open(os.path.join(steamapps, entry), encoding="utf-8",
+                          errors="replace") as f:
+                    body = f.read()
+            except OSError:
+                continue
+            if re.search(r'"installdir"\s+"' + re.escape(installdir) + '"', body):
+                appids.append(m.group(1))
+    except OSError:
+        return []
+
+    patched = []
+    for appid in appids:
+        reg = os.path.join(compatdata, appid, "pfx", "user.reg")
+        if not os.path.isfile(reg):
+            continue
+        try:
+            with open(reg, encoding="utf-8", errors="replace") as f:
+                body = f.read()
+            if '"dinput8"="native' in body:
+                patched.append(appid)
+                continue
+            shutil.copy(reg, reg + ".bak-fnvspeed")
+            block = ('\n[Software\\\\Wine\\\\DllOverrides] %d\n'
+                     '"dinput8"="native,builtin"\n') % int(time.time())
+            if not body.endswith("\n"):
+                body += "\n"
+            with open(reg, "a", encoding="utf-8") as f:
+                f.write(block)
+            patched.append(appid)
+        except OSError as exc:
+            decky.logger.warning("prefix %s patch failed: %s", appid, exc)
+    return patched
+
+
 def _deck_hidraw_nodes() -> list[str]:
     nodes = []
     for path in sorted(glob.glob("/sys/class/hidraw/hidraw*")):
@@ -138,78 +188,38 @@ def _deck_hidraw_nodes() -> list[str]:
     return nodes
 
 
-def _open_input_node() -> tuple[int, str] | None:
-    """Several hidraw nodes exist; only one streams the 0x09 input report."""
-    node = _deck_hidraw_node()
-    if not node:
-        return None
-    fd = os.open(node, os.O_RDONLY | os.O_NONBLOCK)
-    deadline = time.monotonic() + 0.5
-    while time.monotonic() < deadline:
-        ready, _, _ = select.select([fd], [], [], 0.1)
-        if not ready:
-            continue
-        try:
-            report = os.read(fd, 64)
-        except OSError:
-            break
-        if len(report) >= 16 and report[2] == DECK_INPUT_REPORT:
-            return fd, node
-    os.close(fd)
-    return None
-
-
 class PadListener(threading.Thread):
     """Fires on_speed(name) once per press of a back paddle, from hidraw."""
 
-    def __init__(self, on_speed, log, debug_path=None):
+    def __init__(self, on_speed, log):
         # NOTE: target=self._run is mandatory - without it Thread.run()
         # returns immediately and the listener never executes.
         super().__init__(name="FnvSpeedPaddles", daemon=True, target=self._run)
         self._on_speed = on_speed
         self._log = log
-        self._debug_path = debug_path
         self._stop = threading.Event()
-
-    def _dbg(self, message):
-        """Raw file append: thread diagnostics must not depend on any logger."""
-        if not self._debug_path:
-            return
-        try:
-            with open(self._debug_path, "a", encoding="utf-8") as f:
-                f.write(time.strftime("[%H:%M:%S] ") + message + "\n")
-        except Exception:
-            pass
-
-    def start(self):
-        self._dbg("thread start() called")
-        super().start()
 
     def stop(self):
         self._stop.set()
         self.join(timeout=2)
 
     def _run(self):
-        self._dbg("thread entered _run")
         try:
             self._run_inner()
         except BaseException as exc:
-            # a dead listener must never be silent - surface the crash raw
-            self._dbg(f"CRASHED: {exc!r}")
+            # a dead listener must never be silent
+            self._log(f"[-] paddle listener crashed: {exc!r}")
 
     def _run_inner(self):
         fds = {}   # fd -> node path
         announced = False
         was_down = None
         last_toggle = 0.0
-        last_beat = 0.0
-        beat_bytes = None
         while not self._stop.is_set():
             if not fds:
                 nodes = _deck_hidraw_nodes()
                 if not nodes:
                     if not announced:
-                        self._dbg("[!] no valve hidraw nodes (announced)")
                         self._log("[!] Steam Deck controller hidraw not found; paddle speed keys off.")
                         announced = True
                     self._stop.wait(3.0)
@@ -217,14 +227,13 @@ class PadListener(threading.Thread):
                 for node in nodes:  # listen to ALL of them: only one streams
                     try:
                         fds[os.open(node, os.O_RDONLY | os.O_NONBLOCK)] = node
-                    except OSError as exc:
-                        self._dbg(f"open {node} failed: {exc!r}")
+                    except OSError:
+                        pass
                 if not fds:
                     self._stop.wait(3.0)
                     continue
                 announced = False
                 was_down = None
-                self._dbg(f"listening on {sorted(fds.values())}")
                 self._log(f"[pad] listening on {len(fds)} hidraw nodes")
             try:
                 ready, _, _ = select.select(list(fds.keys()), [], [], 0.5)
@@ -247,16 +256,6 @@ class PadListener(threading.Thread):
             if not report or len(report) < 16 or report[2] != DECK_INPUT_REPORT:
                 continue
             now = time.monotonic()
-            # heartbeat: once per 5 s show what the listener actually reads
-            if now - last_beat >= 5.0:
-                last_beat = now
-                cur = (report[9], report[10], report[13])
-                if cur != beat_bytes:
-                    beat_bytes = cur
-                    self._dbg(f"live bytes b9={cur[0]:02x} "
-                              f"b10={cur[1]:02x} b13={cur[2]:02x}")
-                    self._log(f"[pad] live bytes b9={cur[0]:02x} "
-                              f"b10={cur[1]:02x} b13={cur[2]:02x}")
             down = {name for name, (byte, bit) in PAD_BUTTONS.items()
                     if report[byte] & (1 << bit)}
             if down != was_down and down and now - last_toggle >= TOGGLE_COOLDOWN:
@@ -265,7 +264,6 @@ class PadListener(threading.Thread):
                     try:
                         self._on_speed(name)
                     except Exception as exc:
-                        self._dbg(f"on_speed failed: {exc!r}")
                         self._log(f"[-] paddle action failed: {exc}")
             was_down = down
         for fd in fds:
@@ -291,7 +289,7 @@ class Plugin:
         speed = None
         if game_dir:
             dll_installed = (
-                os.path.isfile(os.path.join(game_dir, DLL_NAME))          # dinput8 proxy
+                os.path.isfile(os.path.join(game_dir, PROXY_NAME))       # dinput8 proxy
                 or os.path.isfile(os.path.join(game_dir, "Data", "NVSE",
                                                "Plugins", DLL_NAME)))    # NVSE plugin
             try:
@@ -342,32 +340,33 @@ class Plugin:
             return False
 
     async def install_dll(self) -> dict:
+        """One-click setup: dinput8 proxy + ini + Wine DLL override in the
+        Proton prefix. Works on any FNV exe version (no NVSE needed)."""
         settings = _load_settings()
         game_dir = settings.get("game_dir")
         if not game_dir:
             return {"ok": False, "error": "game_dir not set"}
 
-        src = os.path.join(decky.DECKY_PLUGIN_DIR, DLL_NAME)
-        dst_dir = os.path.join(game_dir, "Data", "NVSE", "Plugins")
-        dst = os.path.join(dst_dir, DLL_NAME)
+        src = os.path.join(decky.DECKY_PLUGIN_DIR, PROXY_NAME)
+        dst = os.path.join(game_dir, PROXY_NAME)
         try:
-            os.makedirs(dst_dir, exist_ok=True)
+            if not os.path.isfile(src):
+                return {"ok": False, "error": f"{PROXY_NAME} missing from plugin"}
             shutil.copyfile(src, dst)
-            ini = os.path.join(dst_dir, "FNVSpeedhack.ini")
+            ini = os.path.join(game_dir, "FNVSpeedhack.ini")
             if not os.path.isfile(ini):
                 with open(ini, "w") as f:
                     f.write(DEFAULT_INI)
-            decky.logger.info("DLL installed: %s", dst)
-            return {"ok": True, "path": dst}
+            prefixes = _patch_prefix_overrides(game_dir)
+            decky.logger.info("speedhack installed: %s (prefixes: %s)", dst, prefixes)
+            return {"ok": True, "path": dst, "prefixes": prefixes}
         except Exception as e:
             decky.logger.error("install_dll failed: %s", e)
             return {"ok": False, "error": str(e)}
 
     async def _main(self):
         self.loop = asyncio.get_running_loop()
-        debug_path = os.path.join(decky.DECKY_PLUGIN_DIR, "pad_debug.txt")
-        self.paddles = PadListener(self._on_paddle, decky.logger.info,
-                                   debug_path=debug_path)
+        self.paddles = PadListener(self._on_paddle, decky.logger.info)
         self.paddles.start()
         decky.logger.info("FNV Speed plugin loaded")
 

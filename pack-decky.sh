@@ -24,7 +24,7 @@ cp decky/fnv-speed/dist/index.js "$STAGE/dist/index.js"
 cp decky/fnv-speed/LICENSE "$STAGE/" 2>/dev/null || true
 cp LICENSE "$STAGE/LICENSE"
 cp README.md "$STAGE/README.md"
-cp FNVSpeedhack.dll "$STAGE/"
+cp dist/dinput8.dll "$STAGE/dinput8.dll"   # the proxy the plugin installs
 
 cd release
 powershell.exe -NoProfile -Command 'Compress-Archive -Path fnv-speed -DestinationPath fnv-speed.zip -Force' >/dev/null
