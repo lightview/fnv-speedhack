@@ -27,7 +27,14 @@ cp README.md "$STAGE/README.md"
 cp dist/dinput8.dll "$STAGE/dinput8.dll"   # the proxy the plugin installs
 
 cd release
-powershell.exe -NoProfile -Command 'Compress-Archive -Path fnv-speed -DestinationPath fnv-speed.zip -Force' >/dev/null
+rm -f fnv-speed.zip
+if command -v zip >/dev/null 2>&1; then
+    zip -qr fnv-speed.zip fnv-speed
+elif command -v powershell.exe >/dev/null 2>&1; then
+    powershell.exe -NoProfile -Command 'Compress-Archive -Path fnv-speed -DestinationPath fnv-speed.zip -Force' >/dev/null
+else
+    python3 -c "import shutil; shutil.make_archive('fnv-speed', 'zip', '.', 'fnv-speed')"
+fi
 cd ..
 echo "[OK] packaged: release/fnv-speed.zip"
 ls -la release
