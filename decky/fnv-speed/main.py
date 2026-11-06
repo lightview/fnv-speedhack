@@ -132,7 +132,7 @@ def _deck_hidraw_node() -> str | None:
             with open(os.path.join(path, "device", "uevent"), "r") as f:
                 if VALVE_DECK_HID_ID in f.read().upper():
                     return "/dev/" + os.path.basename(path)
-        except OSError:
+        except Exception:  # unreadable/odd uevent - just skip the node
             continue
     return None
 
@@ -175,6 +175,16 @@ class PadListener(threading.Thread):
         self.join(timeout=2)
 
     def _run(self):
+        try:
+            self._run_inner()
+        except Exception as exc:
+            # a dead listener must never be silent - surface the crash
+            try:
+                self._log(f"[-] paddle listener crashed: {exc!r}")
+            except Exception:
+                pass
+
+    def _run_inner(self):
         fd = None
         announced = False
         was_down = None
