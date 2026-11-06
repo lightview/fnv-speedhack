@@ -198,6 +198,17 @@ class PadListener(threading.Thread):
 
     def _run_inner(self):
         self._dbg("scanning hidraw nodes")
+        try:
+            paths = sorted(glob.glob("/sys/class/hidraw/hidraw*"))
+            self._dbg(f"glob: {paths}")
+            for path in paths:
+                try:
+                    with open(os.path.join(path, "device", "uevent")) as f:
+                        self._dbg(f"{path} uevent: {f.read()[:100]!r}")
+                except Exception as exc:
+                    self._dbg(f"{path} uevent EXC: {exc!r}")
+        except Exception as exc:
+            self._dbg(f"scan EXC: {exc!r}")
         fd = None
         announced = False
         was_down = None
