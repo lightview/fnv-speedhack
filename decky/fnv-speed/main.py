@@ -137,7 +137,7 @@ def _deck_hidraw_node() -> str | None:
     return None
 
 
-def _open_input_node() -> int | None:
+def _open_input_node() -> tuple[int, str] | None:
     """Several hidraw nodes exist; only one streams the 0x09 input report."""
     node = _deck_hidraw_node()
     if not node:
@@ -153,7 +153,7 @@ def _open_input_node() -> int | None:
         except OSError:
             break
         if len(report) >= 16 and report[2] == DECK_INPUT_REPORT:
-            return fd
+            return fd, node
     os.close(fd)
     return None
 
@@ -179,17 +179,21 @@ class PadListener(threading.Thread):
         announced = False
         was_down = None
         last_toggle = 0.0
+        last_beat = 0.0
+        beat_bytes = None
         while not self._stop.is_set():
             if fd is None:
-                fd = _open_input_node()
-                if fd is None:
+                opened = _open_input_node()
+                if opened is None:
                     if not announced:
                         self._log("[!] Steam Deck controller hidraw not found; paddle speed keys off.")
                         announced = True
                     self._stop.wait(3.0)
                     continue
+                fd, node = opened
                 announced = False
                 was_down = None
+                self._log(f"[pad] listening on {node}")
             try:
                 ready, _, _ = select.select([fd], [], [], 0.5)
                 if not ready:
@@ -202,9 +206,17 @@ class PadListener(threading.Thread):
                 continue
             if len(report) < 16 or report[2] != DECK_INPUT_REPORT:
                 continue
+            now = time.monotonic()
+            # heartbeat: once per 5 s show what the listener actually reads
+            if now - last_beat >= 5.0:
+                last_beat = now
+                cur = (report[9], report[10], report[13])
+                if cur != beat_bytes:
+                    beat_bytes = cur
+                    self._log(f"[pad] live bytes b9={cur[0]:02x} "
+                              f"b10={cur[1]:02x} b13={cur[2]:02x}")
             down = {name for name, (byte, bit) in PAD_BUTTONS.items()
                     if report[byte] & (1 << bit)}
-            now = time.monotonic()
             if down != was_down and down and now - last_toggle >= TOGGLE_COOLDOWN:
                 last_toggle = now
                 for name in sorted(down):
