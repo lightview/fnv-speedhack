@@ -197,18 +197,7 @@ class PadListener(threading.Thread):
             self._dbg(f"CRASHED: {exc!r}")
 
     def _run_inner(self):
-        self._dbg("scanning hidraw nodes")
-        try:
-            paths = sorted(glob.glob("/sys/class/hidraw/hidraw*"))
-            self._dbg(f"glob: {paths}")
-            for path in paths:
-                try:
-                    with open(os.path.join(path, "device", "uevent")) as f:
-                        self._dbg(f"{path} uevent: {f.read()[:100]!r}")
-                except Exception as exc:
-                    self._dbg(f"{path} uevent EXC: {exc!r}")
-        except Exception as exc:
-            self._dbg(f"scan EXC: {exc!r}")
+        self._dbg("scanning hidraw nodes (inline)")
         fd = None
         announced = False
         was_down = None
@@ -217,15 +206,21 @@ class PadListener(threading.Thread):
         beat_bytes = None
         while not self._stop.is_set():
             if fd is None:
-                opened = _open_input_node()
-                if opened is None:
+                node = _deck_hidraw_node()
+                self._dbg(f"detected node: {node!r}")
+                if not node:
                     if not announced:
                         self._dbg("[!] hidraw not found (announced)")
                         self._log("[!] Steam Deck controller hidraw not found; paddle speed keys off.")
                         announced = True
                     self._stop.wait(3.0)
                     continue
-                fd, node = opened
+                try:
+                    fd = os.open(node, os.O_RDONLY | os.O_NONBLOCK)
+                except OSError as exc:
+                    self._dbg(f"open {node} failed: {exc!r}")
+                    self._stop.wait(3.0)
+                    continue
                 announced = False
                 was_down = None
                 self._dbg(f"listening on {node}")
