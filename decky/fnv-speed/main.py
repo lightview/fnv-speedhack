@@ -162,7 +162,9 @@ class PadListener(threading.Thread):
     """Fires on_speed(name) once per press of a back paddle, from hidraw."""
 
     def __init__(self, on_speed, log, debug_path=None):
-        super().__init__(name="FnvSpeedPaddles", daemon=True)
+        # NOTE: target=self._run is mandatory - without it Thread.run()
+        # returns immediately and the listener never executes.
+        super().__init__(name="FnvSpeedPaddles", daemon=True, target=self._run)
         self._on_speed = on_speed
         self._log = log
         self._debug_path = debug_path
