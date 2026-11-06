@@ -82,6 +82,39 @@ else
     msg "Установлено: $GAME/dinput8.dll + $INI_NAME"
 fi
 
+# ---------------------------------------------------------------- runner fix
+# ModOrganizer / EE-Launcher (Qt) crash on fresh PROTON_LG_10-28:
+# unimplemented USER32.GetPointerFrameTouchInfo. PROTON_LG_9-27 verified OK.
+# Pre-seed per-exe .ppdb so PortProton uses the known-good runner.
+
+RUNNER="$HOME_DIR/PortProton/data/dist/PROTON_LG_9-27"
+if [[ -d "$RUNNER" ]]; then
+    msg "Фикс раннера Wine (обход краша MO2/лаунчера на 10-28):"
+    shopt -s nullglob
+    for exe in "$GAME"/*.exe; do
+        ppdb="${exe}.ppdb"
+        exe_name="$(basename "$exe")"
+        if [[ $DRY -eq 1 ]]; then
+            echo "    (dry-run) $ppdb -> PROTON_LG_9-27"
+            continue
+        fi
+        if [[ -f "$ppdb" ]]; then
+            if ! grep -q "PW_WINE_USE" "$ppdb"; then
+                echo 'export PW_WINE_USE="PROTON_LG_9-27"' >> "$ppdb"
+                echo "    $exe_name: раннер -> 9-27"
+            fi
+        else
+            { echo "#!/usr/bin/env bash"
+              echo 'export PW_WINE_USE="PROTON_LG_9-27"'
+              echo 'export PW_PREFIX_NAME="DEFAULT"'
+            } > "$ppdb"
+            echo "    $exe_name: ppdb создан, раннер -> 9-27"
+        fi
+    done
+else
+    msg "PROTON_LG_9-27 в PortProton нет - пропускаю фикс раннера (если лаунчер крашнется: в PortProton смени версию Wine игры на 9-27)"
+fi
+
 # ---------------------------------------------------------------- wine prefix override
 
 patch_user_reg() {  # $1 = path to user.reg
