@@ -161,13 +161,25 @@ def _open_input_node() -> tuple[int, str] | None:
 class PadListener(threading.Thread):
     """Fires on_speed(name) once per press of a back paddle, from hidraw."""
 
-    def __init__(self, on_speed, log):
+    def __init__(self, on_speed, log, debug_path=None):
         super().__init__(name="FnvSpeedPaddles", daemon=True)
         self._on_speed = on_speed
         self._log = log
+        self._debug_path = debug_path
         self._stop = threading.Event()
 
+    def _dbg(self, message):
+        """Raw file append: thread diagnostics must not depend on any logger."""
+        if not self._debug_path:
+            return
+        try:
+            with open(self._debug_path, "a", encoding="utf-8") as f:
+                f.write(time.strftime("[%H:%M:%S] ") + message + "\n")
+        except Exception:
+            pass
+
     def start(self):
+        self._dbg("thread start() called")
         super().start()
 
     def stop(self):
@@ -175,16 +187,15 @@ class PadListener(threading.Thread):
         self.join(timeout=2)
 
     def _run(self):
+        self._dbg("thread entered _run")
         try:
             self._run_inner()
-        except Exception as exc:
-            # a dead listener must never be silent - surface the crash
-            try:
-                self._log(f"[-] paddle listener crashed: {exc!r}")
-            except Exception:
-                pass
+        except BaseException as exc:
+            # a dead listener must never be silent - surface the crash raw
+            self._dbg(f"CRASHED: {exc!r}")
 
     def _run_inner(self):
+        self._dbg("scanning hidraw nodes")
         fd = None
         announced = False
         was_down = None
@@ -196,6 +207,7 @@ class PadListener(threading.Thread):
                 opened = _open_input_node()
                 if opened is None:
                     if not announced:
+                        self._dbg("[!] hidraw not found (announced)")
                         self._log("[!] Steam Deck controller hidraw not found; paddle speed keys off.")
                         announced = True
                     self._stop.wait(3.0)
@@ -203,6 +215,7 @@ class PadListener(threading.Thread):
                 fd, node = opened
                 announced = False
                 was_down = None
+                self._dbg(f"listening on {node}")
                 self._log(f"[pad] listening on {node}")
             try:
                 ready, _, _ = select.select([fd], [], [], 0.5)
@@ -233,6 +246,7 @@ class PadListener(threading.Thread):
                     try:
                         self._on_speed(name)
                     except Exception as exc:
+                        self._dbg(f"on_speed failed: {exc!r}")
                         self._log(f"[-] paddle action failed: {exc}")
             was_down = down
         if fd is not None:
@@ -332,7 +346,9 @@ class Plugin:
 
     async def _main(self):
         self.loop = asyncio.get_running_loop()
-        self.paddles = PadListener(self._on_paddle, decky.logger.info)
+        debug_path = os.path.join(decky.DECKY_PLUGIN_DIR, "pad_debug.txt")
+        self.paddles = PadListener(self._on_paddle, decky.logger.info,
+                                   debug_path=debug_path)
         self.paddles.start()
         decky.logger.info("FNV Speed plugin loaded")
 
