@@ -12,7 +12,16 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install mingw-w64 i686
-        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-i686
+        run: |
+          for attempt in 1 2 3; do
+            echo "apt attempt $attempt"
+            sudo apt-get update -o Acquire::Retries=5
+            if sudo apt-get install -y --no-install-recommends gcc-mingw-w64-i686; then
+              break
+            fi
+            [[ "$attempt" == 3 ]] && exit 1
+            sleep 15
+          done
 
       - name: Build DLL
         run: sh build.sh
