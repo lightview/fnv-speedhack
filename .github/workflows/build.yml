@@ -31,11 +31,13 @@ jobs:
       - name: Package Decky plugin zip
         run: sh pack-decky.sh
 
-      - name: Upload DLL
+      - name: Upload DLLs
         uses: actions/upload-artifact@v4
         with:
-          name: FNVSpeedhack.dll
-          path: FNVSpeedhack.dll
+          name: windows-dlls
+          path: |
+            FNVSpeedhack.dll
+            dist/dinput8.dll
 
       - name: Upload Decky plugin zip
         uses: actions/upload-artifact@v4
