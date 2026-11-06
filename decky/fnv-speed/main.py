@@ -126,15 +126,16 @@ def _pick_candidate(candidates: list[str]) -> str | None:
     return candidates[0] if candidates else None
 
 
-def _deck_hidraw_node() -> str | None:
+def _deck_hidraw_nodes() -> list[str]:
+    nodes = []
     for path in sorted(glob.glob("/sys/class/hidraw/hidraw*")):
         try:
             with open(os.path.join(path, "device", "uevent"), "r") as f:
                 if VALVE_DECK_HID_ID in f.read().upper():
-                    return "/dev/" + os.path.basename(path)
+                    nodes.append("/dev/" + os.path.basename(path))
         except Exception:  # unreadable/odd uevent - just skip the node
             continue
-    return None
+    return nodes
 
 
 def _open_input_node() -> tuple[int, str] | None:
@@ -197,45 +198,53 @@ class PadListener(threading.Thread):
             self._dbg(f"CRASHED: {exc!r}")
 
     def _run_inner(self):
-        self._dbg("scanning hidraw nodes (inline)")
-        fd = None
+        fds = {}   # fd -> node path
         announced = False
         was_down = None
         last_toggle = 0.0
         last_beat = 0.0
         beat_bytes = None
         while not self._stop.is_set():
-            if fd is None:
-                node = _deck_hidraw_node()
-                self._dbg(f"detected node: {node!r}")
-                if not node:
+            if not fds:
+                nodes = _deck_hidraw_nodes()
+                if not nodes:
                     if not announced:
-                        self._dbg("[!] hidraw not found (announced)")
+                        self._dbg("[!] no valve hidraw nodes (announced)")
                         self._log("[!] Steam Deck controller hidraw not found; paddle speed keys off.")
                         announced = True
                     self._stop.wait(3.0)
                     continue
-                try:
-                    fd = os.open(node, os.O_RDONLY | os.O_NONBLOCK)
-                except OSError as exc:
-                    self._dbg(f"open {node} failed: {exc!r}")
+                for node in nodes:  # listen to ALL of them: only one streams
+                    try:
+                        fds[os.open(node, os.O_RDONLY | os.O_NONBLOCK)] = node
+                    except OSError as exc:
+                        self._dbg(f"open {node} failed: {exc!r}")
+                if not fds:
                     self._stop.wait(3.0)
                     continue
                 announced = False
                 was_down = None
-                self._dbg(f"listening on {node}")
-                self._log(f"[pad] listening on {node}")
+                self._dbg(f"listening on {sorted(fds.values())}")
+                self._log(f"[pad] listening on {len(fds)} hidraw nodes")
             try:
-                ready, _, _ = select.select([fd], [], [], 0.5)
+                ready, _, _ = select.select(list(fds.keys()), [], [], 0.5)
                 if not ready:
                     continue
-                report = os.read(fd, 64)
+                report = None
+                for fd in ready:
+                    try:
+                        report = os.read(fd, 64)
+                    except OSError:
+                        report = None
+                    if report:
+                        break
             except OSError:
-                os.close(fd)
-                fd = None  # suspend/resume re-enumerates the controller
+                for fd in fds:
+                    os.close(fd)
+                fds = {}  # suspend/resume re-enumerates the controller
                 self._stop.wait(1.0)
                 continue
-            if len(report) < 16 or report[2] != DECK_INPUT_REPORT:
+            if not report or len(report) < 16 or report[2] != DECK_INPUT_REPORT:
                 continue
             now = time.monotonic()
             # heartbeat: once per 5 s show what the listener actually reads
@@ -244,6 +253,8 @@ class PadListener(threading.Thread):
                 cur = (report[9], report[10], report[13])
                 if cur != beat_bytes:
                     beat_bytes = cur
+                    self._dbg(f"live bytes b9={cur[0]:02x} "
+                              f"b10={cur[1]:02x} b13={cur[2]:02x}")
                     self._log(f"[pad] live bytes b9={cur[0]:02x} "
                               f"b10={cur[1]:02x} b13={cur[2]:02x}")
             down = {name for name, (byte, bit) in PAD_BUTTONS.items()
@@ -257,7 +268,7 @@ class PadListener(threading.Thread):
                         self._dbg(f"on_speed failed: {exc!r}")
                         self._log(f"[-] paddle action failed: {exc}")
             was_down = down
-        if fd is not None:
+        for fd in fds:
             os.close(fd)
 
 
