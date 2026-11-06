@@ -18,6 +18,9 @@ GAME_EXE = "FalloutNV.exe"
 # Steam installs localized FNV depots into suffixed folders; which one runs
 # depends on the account language (e.g. "russian" -> enplczru)
 GAME_SUBDIRS = ["Fallout New Vegas", "Fallout New Vegas enplczru"]
+# non-Steam setups (PortProton/MO2) commonly live here; scanned for any
+# subdir containing the game exe, e.g. ~/games/FNVEE
+EXTRA_ROOTS = ["~/games"]
 
 # Steam Deck controller hidraw: L4/L5/R4/R5 in the 0x09 input report
 # (same layout as the kernel's hid-steam.c). Read straight from the device,
@@ -113,6 +116,19 @@ def _detect_candidates() -> list[str]:
     for root in _steam_roots():
         for library in _library_paths(root):
             for gd in _game_dirs_in_library(library):
+                real = os.path.realpath(gd)
+                if real not in found:
+                    found.append(real)
+    # non-Steam installs: any subdir of the extra roots with the game exe
+    for extra in EXTRA_ROOTS:
+        base = os.path.expanduser(extra)
+        try:
+            entries = sorted(os.listdir(base))
+        except OSError:
+            continue
+        for sub in entries:
+            gd = os.path.join(base, sub)
+            if os.path.isfile(os.path.join(gd, GAME_EXE)):
                 real = os.path.realpath(gd)
                 if real not in found:
                     found.append(real)
